@@ -3,6 +3,7 @@ mod field;
 mod utility;
 mod point;
 
+use std::io;
 use crate::brick::{generate_brick, print_brick, Brick, get_height, get_width, rotate, };
 use crate::field::{can_descend_brick, create_field, Field, will_have_collision, land_brick, print_field};
 use crate::point::{Point, translate_by};
@@ -142,7 +143,9 @@ fn main() {
             },
 
             Stop => {
-                move_to_and_write(field.width as i32 / 2 - 5, field_height as i32 + 2, "Game over!");
+                move_to_and_write(field.width as i32 / 2 - 5, field_height as i32 + 2, "Game over!\nPress any key to continue...");
+                let mut ignored = String::new();
+                io::stdin().read_line(&mut ignored).unwrap();
                 break;
             }
         }
