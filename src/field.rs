@@ -78,12 +78,16 @@ pub fn can_descend_brick(vertices: &Vec<Point>, field: &Field) -> bool{
     return (master_node_pos.y < field.height as i32) && (!will_have_collision(&vertices, &lowered_vertices, field));
 }
 
-fn lower_dead_brick(brick : &mut DeadBrick, field: &Field){
+fn did_lower_dead_brick(brick : &mut DeadBrick, field: &Field) -> bool{
+    let mut was_lowered = false;
     while can_descend_brick(&brick.vertices, field){
+        was_lowered = true;
         for point in brick.vertices.iter_mut(){
             translate_by(point , &Point{x: 0, y: 1});
         }
     }
+
+    return was_lowered;
 }
 
 fn remove_empty_bricks(field: &mut Field){
@@ -161,14 +165,23 @@ pub fn remove_full_rows(field: &mut Field){
 
     let field_immut = field.clone();
 
-    for brick in field.bricks.iter_mut(){
-        lower_dead_brick(brick, &field_immut);
+    loop {
+        let mut any_brick_lowered = false;
+        for brick in field.bricks.iter_mut() {
+            any_brick_lowered |= did_lower_dead_brick(brick, &field_immut);
+        }
+
+        if !any_brick_lowered {
+            break;
+        }
     }
 
     remove_full_rows(field);
 
     clear_console();
 }
+
+
 
 fn print_frame(field: &Field) {
     //left border
