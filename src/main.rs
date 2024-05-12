@@ -26,7 +26,7 @@ enum State { //state of the game
     Stop
 }
 
-fn rotate_brick(brick: &mut Brick, master_node_position : &mut Point, field: &Field) {
+fn rotate_brick(brick: &mut Brick, master_node_position : &Point, field: &Field) {
     let future_width = get_height(&brick) as i32;
     let fits_in_field = master_node_position.x + future_width < (field.width as i32);
     let mut requested_brick = brick.clone();
@@ -36,9 +36,8 @@ fn rotate_brick(brick: &mut Brick, master_node_position : &mut Point, field: &Fi
     translate_by(&mut future_mn_pos, &Point { x: 0, y: 1 });
 
     let future_vertices = get_screen_translated_vertices(&requested_brick.vertices, &future_mn_pos);
-    let current_vertices = get_screen_translated_vertices(&brick.vertices, &master_node_position);
 
-    let has_collision = will_have_collision(&current_vertices, &future_vertices, &field);
+    let has_collision = will_have_collision(&future_vertices, &field);
 
     if fits_in_field && (!has_collision) {
         rotate(brick);
@@ -47,31 +46,29 @@ fn rotate_brick(brick: &mut Brick, master_node_position : &mut Point, field: &Fi
     }
 }
 
-fn move_brick_right(brick: &mut Brick, master_node_position : &mut Point, field: &Field) {
+fn move_brick_right(brick: &Brick, master_node_position : &mut Point, field: &Field) {
     let mut future_mn_pos = master_node_position.clone();
     translate_by(&mut future_mn_pos, &Point { x: 1, y: 0 });
     let width = get_width(&brick) as i32;
     let fits_in_field = future_mn_pos.x + width < (field.width as i32);
 
     let future_vertices = get_screen_translated_vertices(&brick.vertices, &future_mn_pos);
-    let current_vertices = get_screen_translated_vertices(&brick.vertices, &master_node_position);
 
-    if fits_in_field && (!will_have_collision(&current_vertices, &future_vertices, &field)){
+    if fits_in_field && (!will_have_collision(&future_vertices, &field)){
         translate_by(master_node_position, &Point { x: 1, y: 0 });
         print_brick(&brick, &master_node_position);
         print_field(&field);
     }
 }
 
-fn move_brick_left(brick: &mut Brick, master_node_position : &mut Point, field: &Field) {
+fn move_brick_left(brick: &Brick, master_node_position : &mut Point, field: &Field) {
     let mut future_mn_pos = master_node_position.clone();
     translate_by(&mut future_mn_pos, &Point { x: -1, y: 0 });
     let fits_in_field = future_mn_pos.x > 0;
 
     let future_vertices = get_screen_translated_vertices(&brick.vertices, &future_mn_pos);
-    let current_vertices = get_screen_translated_vertices(&brick.vertices, &master_node_position);
 
-    if fits_in_field && (!will_have_collision(&current_vertices, &future_vertices, &field)){
+    if fits_in_field && (!will_have_collision(&future_vertices, &field)){
         translate_by(master_node_position, &Point { x: -1, y: 0 });
         print_brick(&brick, &master_node_position);
         print_field(&field);
@@ -95,8 +92,11 @@ fn main() {
     let mut brick : Brick = generate_brick();
     let mut field : Field = create_field(field_width, field_height);
     let mut master_node_position = Point{x: ((field_width - 2) / 2) as i32, y: 0}; //master node is in the bottom left corner of a rectangle drawn over the brick
+
     let start = Instant::now();
-    let mut interval = 1000;
+    let mut interval = 1000; //how long will it take between each brick descent in ms
+    let mut score = 0; //how many intervals you kept the game going
+
     let stdin_channel = spawn_stdin_channel();
 
     setup_console();
@@ -115,8 +115,7 @@ fn main() {
                 brick = generate_brick();
                 reset_master_node(&brick, &mut master_node_position, &field);
 
-                let translated_vertices = get_screen_translated_vertices(&brick.vertices, &master_node_position);
-                if can_descend_brick(&translated_vertices, &field) {
+                if can_descend_brick(&brick, &master_node_position, &field) {
                     state = Descend;
                 }
                 else {
@@ -127,9 +126,9 @@ fn main() {
 
             Descend => {
                 if start.elapsed().as_millis() % interval == 1 {
-                    let translated_vertices = get_screen_translated_vertices(&brick.vertices, &master_node_position);
+                    score += 1;
 
-                    if can_descend_brick(&translated_vertices, &field) {
+                    if can_descend_brick(&brick, &master_node_position, &field) {
                         translate_by(&mut master_node_position, &Point { x: 0, y: 1 });
                         print_brick(&brick, &master_node_position);
                         print_field(&field);
@@ -143,7 +142,9 @@ fn main() {
             },
 
             Stop => {
-                move_to_and_write(field.width as i32 / 2 - 5, field_height as i32 + 2, "Game over!\nPress any key to continue...");
+                move_to_and_write(field.width as i32 / 2 - 5, field_height as i32 + 2, "Game over!");
+                move_to_and_write(field.width as i32 / 2 - 5, field_height as i32 + 3, format!("Your score: {}", score).as_str());
+                move_to_and_write(field.width as i32 / 2 - 5, field_height as i32 + 4, "Press any key to continue...");
                 let mut ignored = String::new();
                 io::stdin().read_line(&mut ignored).unwrap();
                 break;
@@ -154,11 +155,11 @@ fn main() {
         match stdin_channel.try_recv() {
             Ok(key) => {
                 match FromPrimitive::from_u16(key) {
-                    Some(Keys::Up) => rotate_brick(&mut brick, &mut master_node_position, &field),
+                    Some(Keys::Up) => rotate_brick(&mut brick, &master_node_position, &field),
 
-                    Some(Keys::Right) => move_brick_right(&mut brick, &mut master_node_position, &field),
+                    Some(Keys::Right) => move_brick_right(&brick, &mut master_node_position, &field),
 
-                    Some(Keys::Left) => move_brick_left(&mut brick, &mut master_node_position, &field),
+                    Some(Keys::Left) => move_brick_left(&brick, &mut master_node_position, &field),
 
                     Some(Keys::Abort) =>  {
                         move_to_and_write(field.width as i32 / 2 - 5, field_height as i32 + 2, "Received abort");
