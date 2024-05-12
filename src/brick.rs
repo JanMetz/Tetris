@@ -170,6 +170,8 @@ pub fn rotate(brick: &mut Brick){
 
 fn find_future_master_node(vertices : &Vec<Point>) -> Point{
     //max old x & min old y will become new master node coordinates after the bricks rotation
+    //master node is in the bottom left corner of a rectangle drawn over the brick
+
     let mut p: Point = vertices[0];
 
     for vertex in vertices.iter() {
@@ -188,7 +190,7 @@ fn find_future_master_node(vertices : &Vec<Point>) -> Point{
 }
 
 pub fn find_dead_master_node(vertices : &Vec<Point>) -> Point{
-    //min x & max y are coordinates of the master node of a dead brick
+    //master node is in the bottom left corner of a rectangle drawn over the brick
     let mut p: Point = vertices[0];
 
     for vertex in vertices.iter() {
