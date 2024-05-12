@@ -1,6 +1,6 @@
 use crate::brick::{Brick, DeadBrick, find_dead_master_node, print_dead_brick};
 use crate::point::{are_touching, Point, translate_by};
-use crate::utility::{clear_console, move_to_and_write, get_translated_vertices, get_screen_translated_vertices};
+use crate::utility::{clear_console, move_to_and_write, get_screen_translated_vertices, get_translated_vertices};
 
 #[derive(Clone)]
 pub struct Field{
@@ -13,14 +13,12 @@ pub fn create_field(width : u16, height: u16) -> Field{
     Field{bricks: vec![], height, width}
 }
 
-pub fn will_have_collision(current_vertices: &Vec<Point>, future_vertices: &Vec<Point>, field: &Field) -> bool {
-    for brick in field.bricks.iter(){
-        if brick.vertices != *current_vertices {
-            for dead_ver in brick.vertices.iter() {
-                for new_ver in future_vertices.iter() {
-                    if dead_ver == new_ver {
-                        return true;
-                    }
+pub fn will_have_collision(vertices : &Vec<Point>, field: &Field) -> bool {
+    for dead_brick in field.bricks.iter(){
+        for dead_ver in dead_brick.vertices.iter() {
+            for new_ver in vertices.iter() {
+                if dead_ver == new_ver {
+                    return true;
                 }
             }
         }
@@ -71,18 +69,46 @@ fn does_vertex_exist(field: &Field, row: i32, col: i32) -> bool {
     return false;
 }
 
-pub fn can_descend_brick(vertices: &Vec<Point>, field: &Field) -> bool{
-    let lowered_vertices = get_translated_vertices(&vertices, &Point{x: 0, y: 1});
-    let master_node_pos = find_dead_master_node(&lowered_vertices);
+pub fn can_descend_brick(brick : &Brick, master_node_pos : &Point, field: &Field) -> bool{
+    let translated_vertices = get_screen_translated_vertices(&brick.vertices, &master_node_pos);
+    let lowered_translated_vertices = get_translated_vertices(&translated_vertices, &Point{x: 0, y: 1});
 
-    return (master_node_pos.y < field.height as i32) && (!will_have_collision(&vertices, &lowered_vertices, field));
+    return ((master_node_pos.y + 1) < field.height as i32) && (!will_have_collision(&lowered_translated_vertices, field));
 }
 
-fn did_lower_dead_brick(brick : &mut DeadBrick, field: &Field) -> bool{
+pub fn can_descend_dead_brick(field: &Field, idx : usize) -> bool{
+    let brick_to_be_lowered = field.bricks.get(idx).unwrap();
+    let master_node_pos = find_dead_master_node(&brick_to_be_lowered.vertices);
+
+    if (master_node_pos.y + 1) >= field.height as i32{
+        return false;
+    }
+
+    for i in 0..field.bricks.len() {
+        if i == idx {
+            continue;
+        }
+
+        let brick = field.bricks.get(i).unwrap();
+
+        for ver in brick.vertices.iter() {
+            for new_ver in brick_to_be_lowered.vertices.iter() {
+                if ver.x == new_ver.x && ver.y == (new_ver.y + 1) {
+                    return false;
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
+fn did_lower_dead_brick(field: &mut Field, idx : usize) -> bool{
     let mut was_lowered = false;
-    while can_descend_brick(&brick.vertices, field){
+
+    while can_descend_dead_brick(field, idx){
         was_lowered = true;
-        for point in brick.vertices.iter_mut(){
+        for point in field.bricks.get_mut(idx).unwrap().vertices.iter_mut(){
             translate_by(point , &Point{x: 0, y: 1});
         }
     }
@@ -106,9 +132,13 @@ fn remove_empty_bricks(field: &mut Field){
 fn split_disconnected_subbricks(field: &mut Field){
     let bricks_copy = field.bricks.clone();
 
-    for brick in bricks_copy.into_iter(){
-        for my_vertex in brick.vertices.iter() {
+    for brick_idx in 0..bricks_copy.len(){
+        let brick = bricks_copy.get(brick_idx).unwrap();
+
+        for vertex_idx in 0..brick.vertices.len() {
+            let my_vertex= brick.vertices.get(vertex_idx).unwrap();
             let mut touches_any_neighbour= false;
+
             for other_vertex in brick.vertices.iter() {
                 if my_vertex == other_vertex {
                     continue;
@@ -118,25 +148,19 @@ fn split_disconnected_subbricks(field: &mut Field){
             }
 
             if touches_any_neighbour == false && brick.vertices.len() > 1 {
-                remove_vertex(field, &my_vertex);
+                remove_vertex(field, brick_idx, vertex_idx);
                 field.bricks.push(DeadBrick{vertices: vec![*my_vertex], color: brick.color });
             }
         }
     }
 }
 
-fn remove_vertex(field: &mut Field, vertex: &Point) {
-    for brick in field.bricks.iter_mut(){
-        let position = brick.vertices.iter().position(|point| point == vertex);
+fn remove_vertex(field: &mut Field, brick_idx : usize, vertex_idx : usize) {
+    let mut brick = field.bricks.get_mut(brick_idx).unwrap();
+    brick.vertices.remove(vertex_idx);
 
-        if position != None {
-            brick.vertices.remove(position.unwrap());
-            if brick.vertices.len() == 0 {
-                remove_empty_bricks(field);
-            }
-
-            break;
-        }
+    if brick.vertices.len() == 0 {
+        remove_empty_bricks(field);
     }
 }
 
@@ -163,12 +187,11 @@ pub fn remove_full_rows(field: &mut Field){
     remove_empty_bricks(field);
     split_disconnected_subbricks(field);
 
-    let field_immut = field.clone();
-
-    loop {
+    loop { //to make sure no bricks are blocking virtually
         let mut any_brick_lowered = false;
-        for brick in field.bricks.iter_mut() {
-            any_brick_lowered |= did_lower_dead_brick(brick, &field_immut);
+
+        for i in 0..field.bricks.len() {
+            any_brick_lowered |= did_lower_dead_brick(field, i);
         }
 
         if !any_brick_lowered {
@@ -180,8 +203,6 @@ pub fn remove_full_rows(field: &mut Field){
 
     clear_console();
 }
-
-
 
 fn print_frame(field: &Field) {
     //left border
