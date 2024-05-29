@@ -134,6 +134,7 @@ fn split_disconnected_subbricks(field: &mut Field){
 
     for brick_idx in 0..bricks_copy.len(){
         let brick = bricks_copy.get(brick_idx).unwrap();
+        let mut removed_cnt = 0;
 
         for vertex_idx in 0..brick.vertices.len() {
             let my_vertex= brick.vertices.get(vertex_idx).unwrap();
@@ -148,7 +149,8 @@ fn split_disconnected_subbricks(field: &mut Field){
             }
 
             if touches_any_neighbour == false && brick.vertices.len() > 1 {
-                remove_vertex(field, brick_idx, vertex_idx);
+                remove_vertex(field, brick_idx, vertex_idx - removed_cnt);
+                removed_cnt += 1;
                 field.bricks.push(DeadBrick{vertices: vec![*my_vertex], color: brick.color });
             }
         }
@@ -156,7 +158,7 @@ fn split_disconnected_subbricks(field: &mut Field){
 }
 
 fn remove_vertex(field: &mut Field, brick_idx : usize, vertex_idx : usize) {
-    let mut brick = field.bricks.get_mut(brick_idx).unwrap();
+    let brick = field.bricks.get_mut(brick_idx).unwrap();
     brick.vertices.remove(vertex_idx);
 
     if brick.vertices.len() == 0 {
